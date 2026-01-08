@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin - Hệ Thống Tư Duy</title>
+
+    <!-- Thư viện xuất Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 950px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .btn {
+            padding: 12px 20px;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .box {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid #c8e6c9;
+        }
+        textarea {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #a5d6a7;
+            border-radius: 8px;
+            min-height: 150px;
+            font-family: monospace;
+        }
+        select {
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            min-width: 200px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #2e7d32;
+            color: white;
+        }
+        .guide {
+            font-size: 0.9rem;
+            background: rgba(255,255,255,0.7);
+            padding: 10px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+    <h1 style="color:#2e7d32;">🧠 QUẢN TRỊ VIÊN</h1>
+
+    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+        <button class="btn" style="background:#1976d2" onclick="exportExcel()">📤 XUẤT EXCEL</button>
+        <button class="btn" style="background:#d32f2f" onclick="clearData()">🗑️ LÀM SẠCH</button>
+    </div>
+
+    <div class="box">
+        <h3>📥 Nạp dữ liệu từ Google Sheets</h3>
+        <div class="guide">
+            Copy 6 cột: <b>Câu hỏi | A | B | C | D | Số đúng (0–3)</b> rồi dán vào ô dưới.
+        </div>
+
+        <br>
+        <label><b>Chọn môn:</b></label><br>
+        <select id="sel-sub">
+            <option>Khoa học tự nhiên</option>
+            <option>Toán</option>
+            <option>Văn</option>
+            <option>Anh</option>
+        </select>
+
+        <textarea id="raw-input" placeholder="Dán dữ liệu vào đây..."></textarea>
+
+        <button class="btn" style="background:#2e7d32; width:100%;" onclick="processData()">
+            💾 PHÂN TÍCH & LƯU
+        </button>
+    </div>
+
+    <h3>🗂️ Kho câu hỏi (<span id="count">0</span>)</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th width="15%">Môn</th>
+                <th>Câu hỏi</th>
+                <th width="10%">Xóa</th>
+            </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+    </table>
+
+</div>
+
+<script>
+/* ==== BẢO MẬT ADMIN ==== */
+if (sessionStorage.getItem('admin_login') !== 'true') {
+    const pass = prompt("Nhập mật khẩu admin:");
+    if (pass === "123456") {
+        sessionStorage.setItem('admin_login', 'true');
+    } else {
+        location.href = "index.html";
+    }
+}
+
+/* ==== XỬ LÝ DỮ LIỆU ==== */
+function processData() {
+    const raw = document.getElementById('raw-input').value.trim();
+    const subject = document.getElementById('sel-sub').value;
+    if (!raw) return alert("⚠️ Chưa có dữ liệu!");
+
+    const rows = raw.split('\n');
+    let db = JSON.parse(localStorage.getItem('exam_system_db')) || [];
+    let count = 0;
+
+    rows.forEach(row => {
+        let cols = row.split('\t');
+        if (cols.length < 6) cols = row.split('|');
+
+        if (cols.length >= 6) {
+            let correct = parseInt(cols[5]);
+            if (!isNaN(correct) && correct >= 0 && correct <= 3) {
+                db.push({
+                    id: Date.now() + Math.random(),
+                    subject: subject,
+                    text: cols[0].trim(),
+                    options: [
+                        cols[1].trim(),
+                        cols[2].trim(),
+                        cols[3].trim(),
+                        cols[4].trim()
+                    ],
+                    correct: correct
+                });
+                count++;
+            }
+        }
+    });
+
+    localStorage.setItem('exam_system_db', JSON.stringify(db));
+    document.getElementById('raw-input').value = "";
+    render();
+    alert("✅ Đã lưu " + count + " câu hỏi");
+}
+
+/* ==== HIỂN THỊ ==== */
+function render() {
+    const db = JSON.parse(localStorage.getItem('exam_system_db')) || [];
+    document.getElementById('count').innerText = db.length;
+
+    document.getElementById('table-body').innerHTML =
+        db.slice().reverse().slice(0,50).map((q,i) => `
+        <tr>
+            <td><b>${q.subject}</b></td>
+            <td>${q.text}</td>
+            <td>
+                <button onclick="del(${db.length-1-i})"
+                    style="color:red;border:none;background:none;cursor:pointer;font-weight:bold">
+                    Xóa
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+/* ==== XÓA ==== */
+function del(i) {
+    let db = JSON.parse(localStorage.getItem('exam_system_db'));
+    db.splice(i,1);
+    localStorage.setItem('exam_system_db', JSON.stringify(db));
+    render();
+}
+
+function clearData() {
+    if (confirm("⚠️ Xóa toàn bộ dữ liệu?")) {
+        localStorage.removeItem('exam_system_db');
+        render();
+    }
+}
+
+/* ==== XUẤT EXCEL ==== */
+function exportExcel() {
+    const db = JSON.parse(localStorage.getItem('exam_system_db')) || [];
+    if (db.length === 0) return alert("⚠️ Không có dữ liệu!");
+
+    const data = [
+        ["Môn", "Câu hỏi", "A", "B", "C", "D", "Đáp án đúng"]
+    ];
+
+    db.forEach(q => {
+        data.push([
+            q.subject,
+            q.text,
+            q.options[0],
+            q.options[1],
+            q.options[2],
+            q.options[3],
+            q.correct
+        ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Ngân hàng câu hỏi");
+    XLSX.writeFile(wb, "ngan_hang_cau_hoi.xlsx");
+}
+
+window.onload = render;
+</script>
+
+</body>
+</html>
